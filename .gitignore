@@ -1,0 +1,5 @@
+node_modules
+main.js
+extension.js
+.env
+package-lock.json
