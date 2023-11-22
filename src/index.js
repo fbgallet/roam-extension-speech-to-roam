@@ -14,11 +14,16 @@ export let OPENAI_API_KEY = "";
 export let isUsingWhisper;
 export let transcriptionLanguage;
 export let whisperPrompt;
+export let isTranslateIconDisplayed;
 
 function mountComponent(props) {
   const container = document.getElementsByClassName(
     "speech-to-roam-container"
   )[0];
+  if (!props) {
+    props = {};
+    props.transcribeOnly = isTranslateIconDisplayed ? false : true;
+  }
   let currentBlockUid = window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
   ReactDOM.render(<App blockUid={currentBlockUid} {...props} />, container);
 }
@@ -97,6 +102,19 @@ const panelConfig = {
         },
       },
     },
+    {
+      id: "translateIcon",
+      name: "Translate Icon",
+      description: "Always display translate icon:",
+      action: {
+        type: "switch",
+        onChange: (evt) => {
+          isTranslateIconDisplayed = !isTranslateIconDisplayed;
+          unmountComponent();
+          mountComponent();
+        },
+      },
+    },
     // // SELECT example
     // {
     //   id: "hotkeys",
@@ -130,6 +148,9 @@ export default {
     if (extensionAPI.settings.get("prompt") === null)
       extensionAPI.settings.set("prompt", "");
     whisperPrompt = await extensionAPI.settings.get("prompt");
+    if (extensionAPI.settings.get("translateIcon") === null)
+      extensionAPI.settings.set("translateIcon", true);
+    isTranslateIconDisplayed = await extensionAPI.settings.get("translateIcon");
     initializeOpenAIAPI();
     createContainer();
 
@@ -137,7 +158,17 @@ export default {
       label: "Speech-to-Roam: record & transcribe voice",
       callback: () => {
         document.getElementsByClassName("speech-record-button")
-          ? (unmountComponent(), mountComponent({ startRecording: true }))
+          ? (unmountComponent(),
+            mountComponent({ startRecording: true, transcribeOnly: true }))
+          : mountComponent();
+      },
+    });
+    extensionAPI.ui.commandPalette.addCommand({
+      label: "Speech-to-Roam: translate to english",
+      callback: () => {
+        document.getElementsByClassName("speech-record-button")
+          ? (unmountComponent(),
+            mountComponent({ startRecording: true, translateOnly: true }))
           : mountComponent();
       },
     });

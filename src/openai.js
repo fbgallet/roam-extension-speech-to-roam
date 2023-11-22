@@ -37,6 +37,25 @@ export async function transcribeAudio(filename) {
   }
 }
 
+export async function translateAudio(filename) {
+  if (!openai) return null;
+  try {
+    const options = {
+      file: filename,
+      model: "whisper-1",
+    };
+    // if (transcriptionLanguage) options.language = transcriptionLanguage;
+    // if (whisperPrompt) options.prompt = whisperPrompt;
+    const transcript = await openai.audio.translations.create(options);
+    return transcript.text;
+    // let processed = await gptPostProcessing(transcript.text);
+    // return processed;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
 export async function gptPostProcessing(text) {
   console.log("text: ", text);
   try {

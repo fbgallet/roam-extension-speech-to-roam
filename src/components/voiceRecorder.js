@@ -5,14 +5,16 @@ import {
   faRecordVinyl,
   faDownload,
   faBackwardStep,
+  faWandMagicSparkles,
+  faLanguage,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 //import "./App.css";
 import { getMediaRecorderStream } from "../audio";
-import { transcribeAudio } from "../openai";
+import { transcribeAudio, translateAudio } from "../openai";
 import { addContentToBlock, insertBlockInCurrentView } from "../utils";
 import { Timer } from "./timer";
-import { OPENAI_API_KEY, isUsingWhisper } from "..";
+import { OPENAI_API_KEY, isTranslateIconDisplayed, isUsingWhisper } from "..";
 
 // Speech recognition settings
 const SpeechRecognition =
@@ -24,9 +26,13 @@ mic.lang = "fr-FR";
 mic.maxAlternatives = 2;
 
 function VoiceRecorder(props) {
-  let { blockUid, startRecording } = props;
+  let { blockUid, startRecording, transcribeOnly, translateOnly } = props;
   const [isListening, setIsListening] = useState(startRecording ? true : false);
   const [currentBlock, setCurrentBlock] = useState(blockUid);
+  const [isToDisplay, setIsToDisplay] = useState({
+    transcribeIcon: !translateOnly,
+    translateIcon: !transcribeOnly,
+  });
   const [note, setNote] = useState(null);
   const [time, setTime] = useState(0);
 
@@ -140,7 +146,15 @@ function VoiceRecorder(props) {
     };
   };
 
-  const handleSaveNote = async () => {
+  const handleTranscribe = () => {
+    voiceProcessing(transcribeAudio);
+  };
+
+  const handleTranslate = () => {
+    voiceProcessing(translateAudio);
+  };
+
+  const voiceProcessing = async (openAIvoiceProcessing) => {
     if (!recording) {
       setIsListening(false);
       setRecording(null);
@@ -152,7 +166,7 @@ function VoiceRecorder(props) {
     // Transcribe audio
     let transcribe = note
       ? isUsingWhisper && OPENAI_API_KEY
-        ? await transcribeAudio(recording)
+        ? await openAIvoiceProcessing(recording)
         : note
       : "Nothing has been recorded!";
     console.log("SpeechAPI: " + note);
@@ -173,13 +187,18 @@ function VoiceRecorder(props) {
     if (isListening) {
       setIsListening(false);
     }
-    initialize(false);
+    initialize(time ? false : true);
   };
 
-  const initialize = (hideControls = true) => {
+  const initialize = (complete = true) => {
     setTime(0);
     setNote("");
-    setRecording(hideControls ? null : undefined);
+    setRecording(complete ? null : undefined);
+    if (complete)
+      setIsToDisplay({
+        transcribeIcon: true,
+        translateIcon: isTranslateIconDisplayed || translateOnly,
+      });
     audioChunk.current = [];
   };
 
@@ -216,6 +235,7 @@ function VoiceRecorder(props) {
               onClick={handleBackward}
               class="bp3-button bp3-minimal bp3-small speech-backward-button"
               tabindex="0"
+              title="Transcribe Voice to Text"
             >
               <FontAwesomeIcon
                 icon={faBackwardStep}
@@ -226,24 +246,45 @@ function VoiceRecorder(props) {
           </span>
         </span>
       )}
-      <span class="bp3-popover-wrapper">
-        <span aria-haspopup="true" class="bp3-popover-target">
-          {(isListening || recording !== null) && (
-            <span
-              onClick={handleSaveNote}
-              disabled={!recording}
-              class="bp3-button bp3-minimal bp3-small"
-              tabindex="0"
-            >
-              <FontAwesomeIcon
-                icon={faDownload}
-                flip="horizontal"
-                style={{ color: "#5c7080" }}
-              />
-            </span>
-          )}
+      {isToDisplay.transcribeIcon && (
+        <span class="bp3-popover-wrapper">
+          <span aria-haspopup="true" class="bp3-popover-target">
+            {(isListening || recording !== null) && (
+              <span
+                onClick={handleTranscribe}
+                disabled={!recording}
+                class="bp3-button bp3-minimal bp3-small"
+                tabindex="0"
+              >
+                <FontAwesomeIcon
+                  icon={faWandMagicSparkles}
+                  style={{ color: "#5c7080" }}
+                />
+              </span>
+            )}
+          </span>
         </span>
-      </span>
+      )}{" "}
+      {isToDisplay.translateIcon && (
+        <span class="bp3-popover-wrapper">
+          <span aria-haspopup="true" class="bp3-popover-target">
+            {(isListening || recording !== null) && (
+              <span
+                onClick={handleTranslate}
+                disabled={!recording}
+                class="bp3-button bp3-minimal bp3-small"
+                tabindex="0"
+              >
+                <FontAwesomeIcon
+                  icon={faLanguage}
+                  flip="horizontal"
+                  style={{ color: "#5c7080" }}
+                />
+              </span>
+            )}
+          </span>
+        </span>
+      )}
     </>
   );
 }
