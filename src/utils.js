@@ -21,6 +21,26 @@ export function getTreeByUid(uid) {
 //   else return null;
 // }
 
+export async function getFirstLevelBlocksInCurrentView() {
+  let zoomUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
+  if (!zoomUid) return null;
+  return getOrderedDirectChildren(zoomUid);
+}
+
+function getOrderedDirectChildren(uid) {
+  if (!uid) return null;
+  let result = window.roamAlphaAPI.q(`[:find (pull ?page
+                      [:block/uid :block/string :block/children :block/order
+                         {:block/children  ...} ])
+                       :where [?page :block/uid "${uid}"] ]`)[0][0];
+  if (!result.children) {
+    return null;
+  }
+  return result.children
+    .sort((a, b) => a.order - b.order)
+    .map((block) => ({ string: block.string, uid: block.uid }));
+}
+
 export function getBlockContentByUid(uid) {
   let result = window.roamAlphaAPI.pull("[:block/string]", [":block/uid", uid]);
   if (result) return result[":block/string"];
@@ -55,19 +75,29 @@ export function processNotesInTree(tree, callback, callbackArgs) {
   }
 }
 
-export function insertBlock(startUid, content) {
-  // let parentUid = window.roamAlphaAPI.util.generateUID();
-  if (!startUid) {
-    startUid = "UB-lqJO6r";
-    window.roamAlphaAPI.createBlock({
-      location: { "parent-uid": startUid, order: 0 },
-      block: {
-        string: content,
-      },
-    });
-    return;
+export async function insertBlockInCurrentView(content, order) {
+  let zoomUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
+  // If not on a given page, but in Daily Log
+  if (!zoomUid) {
+    zoomUid = window.roamAlphaAPI.util.dateToPageUid(new Date());
+    // TODO : send a message "Added on DNP page"
   }
+
+  window.roamAlphaAPI.createBlock({
+    location: {
+      "parent-uid": zoomUid,
+      order: order === "first" || order === 0 ? 0 : "last",
+    },
+    block: {
+      string: content,
+    },
+  });
+  return;
+}
+
+export function addContentToBlock(uid, contentToAdd) {
+  const currentContent = getBlockContentByUid(uid);
   window.roamAlphaAPI.updateBlock({
-    block: { uid: startUid, string: content },
+    block: { uid: uid, string: currentContent + contentToAdd },
   });
 }

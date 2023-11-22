@@ -8,24 +8,34 @@ import {
 import React from "react";
 import ReactDOM from "react-dom";
 import App from "./App";
-import { initializeOpenAIAPI } from "./openai";
+import { initializeOpenAIAPI, supportedLanguage } from "./openai";
 
 export let OPENAI_API_KEY = "";
+export let isUsingWhisper;
+export let transcriptionLanguage;
+export let whisperPrompt;
 
-function mountComponent() {
+function mountComponent(props) {
   const container = document.getElementsByClassName(
     "speech-to-roam-container"
   )[0];
   let currentBlockUid = window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
-  ReactDOM.render(<App blockUid={currentBlockUid} />, container);
+  ReactDOM.render(<App blockUid={currentBlockUid} {...props} />, container);
+}
+
+function unmountComponent() {
+  const node = document.getElementsByClassName("speech-to-roam-container")[0];
+  ReactDOM.unmountComponentAtNode(node);
 }
 
 function createContainer() {
-  const rootPosition =
-    document.getElementsByClassName("rm-sync")[0].parentNode.parentNode;
+  // const rootPosition =
+  //   document.getElementsByClassName("rm-sync")[0].parentNode.parentNode;
+  const rootPosition = document.getElementsByClassName("rm-topbar")[0];
   const newSpan = document.createElement("span");
   newSpan.classList.add("speech-to-roam-container");
-  rootPosition.parentNode.insertBefore(newSpan, rootPosition);
+  // rootPosition.parentNode.insertBefore(newSpan, rootPosition);
+  rootPosition.insertBefore(newSpan, rootPosition.firstChild);
 }
 
 function removeContainer() {
@@ -39,6 +49,18 @@ const panelConfig = {
   tabTitle: "___",
   settings: [
     {
+      id: "whisper",
+      name: "Use Whisper API",
+      description:
+        "Use Whisper API (paid service) for transcription. If disabled, free system speech recognition will be used:",
+      action: {
+        type: "switch",
+        onChange: (evt) => {
+          isUsingWhisper = !isUsingWhisper;
+        },
+      },
+    },
+    {
       id: "openaiapi",
       name: "OpenAI API Key",
       description: "Copy here your OpenAI API key",
@@ -46,22 +68,35 @@ const panelConfig = {
         type: "input",
         onChange: (evt) => {
           OPENAI_API_KEY = evt.target.value;
+          initializeOpenAIAPI();
         },
       },
     },
-    // // SWITCH example
-    // {
-    //   id: "insertLine",
-    //   name: "Insert a line above footnotes header",
-    //   description:
-    //     "Insert a block drawing a line just above the footnotes header, at the bottom of the page:",
-    //   action: {
-    //     type: "switch",
-    //     onChange: (evt) => {
-    //       // insertLineBeforeFootnotes = !insertLineBeforeFootnotes;
-    //     },
-    //   },
-    // },
+    {
+      id: "transcriptionLgg",
+      name: "Transcription language",
+      description:
+        "You can enter your language code (ISO 639-1) for better transcription (option):",
+      action: {
+        type: "input",
+        onChange: (evt) => {
+          const lgg = evt.target.value.toLowerCase().trim();
+          transcriptionLanguage = supportedLanguage.includes(lgg) ? lgg : "";
+        },
+      },
+    },
+    {
+      id: "prompt",
+      name: "Prompt for Whisper",
+      description:
+        "You can enter a list of specific words or proper nouns for better recognition and spelling:",
+      action: {
+        type: "input",
+        onChange: (evt) => {
+          whisperPrompt = evt.target.value.trim();
+        },
+      },
+    },
     // // SELECT example
     // {
     //   id: "hotkeys",
@@ -83,25 +118,41 @@ export default {
     extensionAPI.settings.panel.create(panelConfig);
 
     // get settings from setting panel
+    if (extensionAPI.settings.get("whisper") === null)
+      extensionAPI.settings.set("whisper", true);
+    isUsingWhisper = await extensionAPI.settings.get("whisper");
     if (extensionAPI.settings.get("openaiapi") === null)
       extensionAPI.settings.set("openaiapi", "");
     OPENAI_API_KEY = await extensionAPI.settings.get("openaiapi");
+    if (extensionAPI.settings.get("transcriptionLgg") === null)
+      extensionAPI.settings.set("transcriptionLgg", "");
+    transcriptionLanguage = await extensionAPI.settings.get("transcriptionLgg");
+    if (extensionAPI.settings.get("prompt") === null)
+      extensionAPI.settings.set("prompt", "");
+    whisperPrompt = await extensionAPI.settings.get("prompt");
     initializeOpenAIAPI();
     createContainer();
 
-    window.roamAlphaAPI.ui.commandPalette.addCommand({
-      label: "Speech to Roam",
+    extensionAPI.ui.commandPalette.addCommand({
+      label: "Speech-to-Roam: record & transcribe voice",
       callback: () => {
-        mountComponent();
+        document.getElementsByClassName("speech-record-button")
+          ? (unmountComponent(), mountComponent({ startRecording: true }))
+          : mountComponent();
       },
     });
 
-    // Add command to block context menu
-    // roamAlphaAPI.ui.blockContextMenu.addCommand({
-    //   label: "Color Highlighter: Remove color tags",
-    //   "display-conditional": (e) => e["block-string"].includes("#c:"),
-    //   callback: (e) => removeHighlightsFromBlock(e["block-uid"], removeOption),
-    // });
+    extensionAPI.ui.commandPalette.addCommand({
+      label: "Speech-to-Roam: toggle button in top bar",
+      callback: () => {
+        let recordingButtonElts = document.getElementsByClassName(
+          "speech-record-button"
+        );
+        recordingButtonElts.length !== 0
+          ? unmountComponent()
+          : mountComponent();
+      },
+    });
 
     // Add SmartBlock command
     // const insertCmd = {
@@ -125,7 +176,7 @@ export default {
     //   });
     // }
 
-    // addObserver();
+    mountComponent();
 
     console.log("Extension loaded.");
     //return;
@@ -133,14 +184,6 @@ export default {
   onunload: () => {
     removeContainer();
     // disconnectObserver();
-
-    // window.roamAlphaAPI.ui.commandPalette.removeCommand({
-    //   label: "Footnotes: Reorder footnotes on current page",
-    // });
-
-    // roamAlphaAPI.ui.blockContextMenu.removeCommand({
-    //   label: "Color Highlighter: Remove color tags",
-    // });
     console.log("Extension unloaded");
   },
 };

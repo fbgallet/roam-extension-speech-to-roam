@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { OPENAI_API_KEY } from ".";
+import { OPENAI_API_KEY, transcriptionLanguage, whisperPrompt } from ".";
 
 let openai;
 
@@ -18,21 +18,22 @@ export async function transcribeAudio(filename) {
   // let audioFile = new File([filename], "myaudio.ogg", {
   //   type: "audio/ogg; codecs=opus",
   // });
-  console.log(filename);
+  if (!openai) return null;
   try {
     console.log(filename);
-    const transcript = await openai.audio.transcriptions.create({
+    const options = {
       file: filename,
       model: "whisper-1",
-      language: "fr",
-      // prompt:
-      //   "Ecrire correctement ces noms propres: Leonardo DiCaprio, Brad Pitt, Johnny Depp, Robert Downey Jr., Will Smith, Tom Hanks, Morgan Freeman, Samuel L. Jackson",
-    });
+    };
+    if (transcriptionLanguage) options.language = transcriptionLanguage;
+    if (whisperPrompt) options.prompt = whisperPrompt;
+    const transcript = await openai.audio.transcriptions.create(options);
     return transcript.text;
     // let processed = await gptPostProcessing(transcript.text);
     // return processed;
   } catch (error) {
     console.error(error);
+    return null;
   }
 }
 
@@ -53,3 +54,105 @@ export async function gptPostProcessing(text) {
     console.error(error);
   }
 }
+
+export const supportedLanguage = [
+  "af",
+  "am",
+  "ar",
+  "as",
+  "az",
+  "ba",
+  "be",
+  "bg",
+  "bn",
+  "bo",
+  "br",
+  "bs",
+  "ca",
+  "cs",
+  "cy",
+  "da",
+  "de",
+  "el",
+  "en",
+  "es",
+  "et",
+  "eu",
+  "fa",
+  "fi",
+  "fo",
+  "fr",
+  "gl",
+  "gu",
+  "ha",
+  "haw",
+  "he",
+  "hi",
+  "hr",
+  "ht",
+  "hu",
+  "hy",
+  "id",
+  "is",
+  "it",
+  "ja",
+  "jw",
+  "ka",
+  "kk",
+  "km",
+  "kn",
+  "ko",
+  "la",
+  "lb",
+  "ln",
+  "lo",
+  "lt",
+  "lv",
+  "mg",
+  "mi",
+  "mk",
+  "ml",
+  "mn",
+  "mr",
+  "ms",
+  "mt",
+  "my",
+  "ne",
+  "nl",
+  "nn",
+  "no",
+  "oc",
+  "pa",
+  "pl",
+  "ps",
+  "pt",
+  "ro",
+  "ru",
+  "sa",
+  "sd",
+  "si",
+  "sk",
+  "sl",
+  "sn",
+  "so",
+  "sq",
+  "sr",
+  "su",
+  "sv",
+  "sw",
+  "ta",
+  "te",
+  "tg",
+  "th",
+  "tk",
+  "tl",
+  "tr",
+  "tt",
+  "uk",
+  "ur",
+  "uz",
+  "vi",
+  "yi",
+  "yo",
+  "zh",
+];
