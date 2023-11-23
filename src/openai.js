@@ -1,5 +1,11 @@
 import OpenAI from "openai";
-import { OPENAI_API_KEY, transcriptionLanguage, whisperPrompt } from ".";
+import {
+  OPENAI_API_KEY,
+  gptCustomModel,
+  gptModel,
+  transcriptionLanguage,
+  whisperPrompt,
+} from ".";
 
 let openai;
 
@@ -69,6 +75,26 @@ export async function gptPostProcessing(text) {
     });
     console.log(postProcessedText.choices[0]);
     return postProcessedText.choices[0].text;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+export async function gptCompletion(prompt, model, context) {
+  try {
+    const response = await openai.chat.completions.create({
+      model: model || (gptModel === "custom model" ? gptCustomModel : gptModel),
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a smart and expert assistant. " + (context ? context : ""),
+        },
+        { role: "user", content: prompt },
+      ],
+    });
+    console.log(response.choices[0]);
+    return response.choices[0].message.content;
   } catch (error) {
     console.error(error);
   }

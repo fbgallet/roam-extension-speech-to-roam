@@ -17,6 +17,9 @@ export let transcriptionLanguage;
 export let speechLanguage;
 export let whisperPrompt;
 export let isTranslateIconDisplayed;
+export let gptModel;
+export let gptCustomModel;
+export let chatRoles;
 
 function mountComponent(props) {
   const container = document.getElementsByClassName(
@@ -24,7 +27,7 @@ function mountComponent(props) {
   )[0];
   if (!props) {
     props = {};
-    props.transcribeOnly = isTranslateIconDisplayed ? false : true;
+    // props.transcribeOnly = isTranslateIconDisplayed ? false : true;
   }
   props.mic = getSpeechRecognitionAPI();
   let currentBlockUid = window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
@@ -133,8 +136,58 @@ const panelConfig = {
         },
       },
     },
+    {
+      id: "gptModel",
+      name: "OpenAI Chat Completion Model",
+      description: "Choose a model or 'custom model' to be specified below:",
+      action: {
+        type: "select",
+        items: [
+          "gpt-3.5-turbo-1106",
+          "gpt-4-1106-preview",
+          "gpt-4",
+          "custom model",
+        ],
+        onChange: (evt) => {
+          gptModel = evt;
+        },
+      },
+    },
+    {
+      id: "customModel",
+      name: "Custom model",
+      description: "⚠️ Only OpenAI Chat completion models are compatible",
+      action: {
+        type: "input",
+        onChange: (evt) => {
+          gptCustomModel = evt;
+        },
+      },
+    },
+    {
+      id: "chatRoles",
+      name: "Chat roles",
+      description:
+        "Roles name (or header) inserted, in Roam blocks, before your prompt and GPT model answer, separated by a coma:",
+      action: {
+        type: "input",
+        onChange: (evt) => {
+          if (evt.target.value)
+            chatRoles = getRolesFromString(evt.target.value);
+        },
+      },
+    },
   ],
 };
+
+function getRolesFromString(str) {
+  let splittedStr = str ? str.split(",") : [];
+  return {
+    user: splittedStr[0],
+    assistant:
+      splittedStr.length > 1 ? splittedStr[1].trimStart() : "AI assistant: ",
+  };
+}
 
 export default {
   onload: async ({ extensionAPI }) => {
@@ -159,6 +212,17 @@ export default {
     if (extensionAPI.settings.get("translateIcon") === null)
       extensionAPI.settings.set("translateIcon", true);
     isTranslateIconDisplayed = await extensionAPI.settings.get("translateIcon");
+    if (extensionAPI.settings.get("gptModel") === null)
+      extensionAPI.settings.set("gptModel", "gpt-3.5-turbo-1106");
+    gptModel = await extensionAPI.settings.get("gptModel");
+    if (extensionAPI.settings.get("gptCustomModel") === null)
+      extensionAPI.settings.set("gptCustomModel", "");
+    gptCustomModel = await extensionAPI.settings.get("gptCustomModel");
+    if (extensionAPI.settings.get("chatRoles") === null)
+      await extensionAPI.settings.set("chatRoles", "Me: ,AI assistant: ");
+    const chatRolesStr =
+      (await extensionAPI.settings.get(chatRoles)) || "Me: ,AI assistant: ";
+    chatRoles = getRolesFromString(chatRolesStr);
     initializeOpenAIAPI();
     createContainer();
 
@@ -177,6 +241,15 @@ export default {
         document.getElementsByClassName("speech-record-button")
           ? (unmountComponent(),
             mountComponent({ startRecording: true, translateOnly: true }))
+          : mountComponent();
+      },
+    });
+    extensionAPI.ui.commandPalette.addCommand({
+      label: "Speech-to-Roam: speak to GPT assistant",
+      callback: () => {
+        document.getElementsByClassName("speech-record-button")
+          ? (unmountComponent(),
+            mountComponent({ startRecording: true, completionOnly: true }))
           : mountComponent();
       },
     });

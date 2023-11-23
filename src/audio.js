@@ -1,10 +1,12 @@
 import { speechLanguage } from ".";
 
+let stream;
+
 export async function getMediaRecorderStream(audioChunk) {
   const options = {
     audio: true,
   };
-  const stream = await navigator.mediaDevices.getUserMedia(options);
+  stream = await navigator.mediaDevices.getUserMedia(options);
   const mediaRecorder = new MediaRecorder(stream);
   mediaRecorder.ondataavailable = (e) => {
     if (e.data.size > 0) {
@@ -13,6 +15,17 @@ export async function getMediaRecorderStream(audioChunk) {
     }
   };
   return mediaRecorder;
+}
+
+export function closeStream() {
+  stream.getTracks().forEach((track) => {
+    track.stop();
+    track.enabled = false;
+  });
+  const audioContext = new AudioContext();
+  audioContext.close;
+  const microphone = audioContext.createMediaStreamSource(stream);
+  microphone.disconnect;
 }
 
 export function getSpeechRecognitionAPI() {
