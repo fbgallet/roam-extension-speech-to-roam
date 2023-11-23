@@ -10,30 +10,21 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 //import "./App.css";
-import { getMediaRecorderStream } from "../audio";
+import { getMediaRecorderStream, getSpeechRecognitionAPI } from "../audio";
 import { transcribeAudio, translateAudio } from "../openai";
 import { addContentToBlock, insertBlockInCurrentView } from "../utils";
 import { Timer } from "./timer";
 import { OPENAI_API_KEY, isTranslateIconDisplayed, isUsingWhisper } from "..";
 
-// Speech recognition settings
-const SpeechRecognition =
-  window.SpeechRecognition || window.webkitSpeechRecognition;
-const mic = new SpeechRecognition();
-mic.continuous = true;
-mic.interimResults = true;
-mic.lang = "fr-FR";
-mic.maxAlternatives = 2;
-
 function VoiceRecorder(props) {
-  let { blockUid, startRecording, transcribeOnly, translateOnly } = props;
+  let { blockUid, startRecording, transcribeOnly, translateOnly, mic } = props;
   const [isListening, setIsListening] = useState(startRecording ? true : false);
   const [currentBlock, setCurrentBlock] = useState(blockUid);
   const [isToDisplay, setIsToDisplay] = useState({
     transcribeIcon: !translateOnly,
     translateIcon: !transcribeOnly,
   });
-  const [note, setNote] = useState(null);
+  const [instantVoiceReco, setinstantVoiceReco] = useState(null);
   const [time, setTime] = useState(0);
 
   const audioChunk = useRef([]);
@@ -69,7 +60,7 @@ function VoiceRecorder(props) {
     mediaRecorderRef.current = await getMediaRecorderStream(audioChunk);
     mediaRecorderRef.current.start();
 
-    mediaRecorderRef.current.onstop = (e) => {
+    mediaRecorderRef.current.onstop = async (e) => {
       console.log("End to record");
       const audioBlob = new Blob(audioChunk.current);
       const audioFile = new File([audioBlob], "audio.ogg", {
@@ -79,37 +70,20 @@ function VoiceRecorder(props) {
     };
   };
 
-  const stopRec = () => {
+  const stopRec = async () => {
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state === "recording"
     ) {
-      mediaRecorderRef.current.stop();
+      await mediaRecorderRef.current.stop();
     }
   };
-
-  // const onHotkeysPressed = (evt) => {
-  //   if (evt.code === "Space") {
-  //     console.log("space");
-  //     console.log(isListening);
-  //     if (isListening) (() => setIsListening((prevState) => !prevState))();
-  //   } else if (evt.code === "Escape") {
-  //     console.log("escape");
-  //     if (isListening) handleBackward();
-  //   } else if (evt.code === "Enter") {
-  //     console.log("enter");
-  //     if (isListening) handleSaveNote();
-  //   }
-  // };
-  // const removeHotkeysListeners = () => {
-  //   document.removeEventListener("keypress", onHotkeysPressed);
-  // };
 
   useEffect(() => {
     handleListen();
   }, [isListening]);
 
-  const handleListen = () => {
+  const handleListen = async () => {
     // recognition
     if (isListening) {
       mic.start();
@@ -128,7 +102,7 @@ function VoiceRecorder(props) {
       };
 
       // record
-      stopRec();
+      await stopRec();
     }
     mic.onstart = () => {
       console.log("Mics on");
@@ -139,7 +113,7 @@ function VoiceRecorder(props) {
         .map((result) => result.transcript)
         .join("");
       console.log(transcript);
-      setNote(transcript);
+      setinstantVoiceReco(transcript);
       mic.onerror = (event) => {
         console.log(event.error);
       };
@@ -150,31 +124,32 @@ function VoiceRecorder(props) {
     voiceProcessing(transcribeAudio);
   };
 
-  const handleTranslate = () => {
-    voiceProcessing(translateAudio);
+  const handleTranslate = async () => {
+    await voiceProcessing(translateAudio);
   };
 
   const voiceProcessing = async (openAIvoiceProcessing) => {
+    if (isListening) {
+      setIsListening((prevState) => !prevState);
+    }
     if (!recording) {
       setIsListening(false);
       setRecording(null);
       return;
     }
-    if (isListening) {
-      setIsListening(false);
-    }
     // Transcribe audio
-    let transcribe = note
+    let transcribe = instantVoiceReco
       ? isUsingWhisper && OPENAI_API_KEY
         ? await openAIvoiceProcessing(recording)
-        : note
+        : instantVoiceReco
       : "Nothing has been recorded!";
-    console.log("SpeechAPI: " + note);
-    console.log("Whisper: " + transcribe);
+    // console.log("SpeechAPI: " + instantVoiceReco);
+    // console.log("Whisper: " + transcribe);
     if (transcribe === null)
       transcribe =
-        note + " (⚠️ native recognition, verify your Whisper API key)";
-    setNote("");
+        instantVoiceReco +
+        " (⚠️ native recognition, verify your Whisper API key)";
+    setinstantVoiceReco("");
     currentBlock
       ? addContentToBlock(currentBlock, transcribe)
       : insertBlockInCurrentView(transcribe);
@@ -192,7 +167,7 @@ function VoiceRecorder(props) {
 
   const initialize = (complete = true) => {
     setTime(0);
-    setNote("");
+    setinstantVoiceReco("");
     setRecording(complete ? null : undefined);
     if (complete)
       setIsToDisplay({
@@ -202,14 +177,34 @@ function VoiceRecorder(props) {
     audioChunk.current = [];
   };
 
+  const handleKeys = async (e) => {
+    if (e.code === "Escape") {
+      handleBackward();
+    }
+    if (e.code === "Space") {
+      setIsListening((prevState) => !prevState);
+    }
+    if (e.code === "Enter") {
+      if (!translateOnly) {
+        handleTranscribe();
+      }
+    }
+  };
+
   return (
     <>
       <span class="bp3-popover-wrapper">
         <span aria-haspopup="true" class="bp3-popover-target">
           <span
+            onKeyDown={handleKeys}
             onClick={() => setIsListening((prevState) => !prevState)}
             class="bp3-button bp3-minimal bp3-small speech-record-button"
             tabindex="0"
+            title={
+              isListening
+                ? "Stop/Pause voice recording"
+                : "Start/Resume voice recording"
+            }
           >
             {isListening ? (
               <FontAwesomeIcon
@@ -235,7 +230,7 @@ function VoiceRecorder(props) {
               onClick={handleBackward}
               class="bp3-button bp3-minimal bp3-small speech-backward-button"
               tabindex="0"
-              title="Transcribe Voice to Text"
+              title="Rewind and delete the current recording."
             >
               <FontAwesomeIcon
                 icon={faBackwardStep}
@@ -255,6 +250,7 @@ function VoiceRecorder(props) {
                 disabled={!recording}
                 class="bp3-button bp3-minimal bp3-small"
                 tabindex="0"
+                title="Transcribe Voice to Text"
               >
                 <FontAwesomeIcon
                   icon={faWandMagicSparkles}
@@ -274,6 +270,7 @@ function VoiceRecorder(props) {
                 disabled={!recording}
                 class="bp3-button bp3-minimal bp3-small"
                 tabindex="0"
+                title="Translate Voice to English text"
               >
                 <FontAwesomeIcon
                   icon={faLanguage}

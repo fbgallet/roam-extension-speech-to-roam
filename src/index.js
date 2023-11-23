@@ -1,18 +1,20 @@
-import {
-  getBlockContentByUid,
-  getTreeByUid,
-  processNotesInTree,
-} from "./utils";
+// import {
+//   getBlockContentByUid,
+//   getTreeByUid,
+//   processNotesInTree,
+// } from "./utils";
 //import { addObserver, disconnectObserver } from "./observers";
 
 import React from "react";
 import ReactDOM from "react-dom";
 import App from "./App";
 import { initializeOpenAIAPI, supportedLanguage } from "./openai";
+import { getSpeechRecognitionAPI, webLangCodes } from "./audio";
 
 export let OPENAI_API_KEY = "";
 export let isUsingWhisper;
 export let transcriptionLanguage;
+export let speechLanguage;
 export let whisperPrompt;
 export let isTranslateIconDisplayed;
 
@@ -24,6 +26,7 @@ function mountComponent(props) {
     props = {};
     props.transcribeOnly = isTranslateIconDisplayed ? false : true;
   }
+  props.mic = getSpeechRecognitionAPI();
   let currentBlockUid = window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
   ReactDOM.render(<App blockUid={currentBlockUid} {...props} />, container);
 }
@@ -91,6 +94,21 @@ const panelConfig = {
       },
     },
     {
+      id: "speechLgg",
+      name: "Language for browser recognition",
+      description:
+        "Applied when Whisper is disable. By default, it should be the language of your browser",
+      action: {
+        type: "select",
+        items: webLangCodes,
+        onChange: (evt) => {
+          speechLanguage = evt;
+          unmountComponent();
+          mountComponent();
+        },
+      },
+    },
+    {
       id: "prompt",
       name: "Prompt for Whisper",
       description:
@@ -115,19 +133,6 @@ const panelConfig = {
         },
       },
     },
-    // // SELECT example
-    // {
-    //   id: "hotkeys",
-    //   name: "Hotkeys",
-    //   description: "Hotkeys to insert/delete footnote",
-    //   action: {
-    //     type: "select",
-    //     items: ["Ctrl + Alt + F", "Ctrl + Shift + F"],
-    //     onChange: (evt) => {
-    //       // secondHotkey = getHotkeys(evt);
-    //     },
-    //   },
-    // },
   ],
 };
 
@@ -145,6 +150,9 @@ export default {
     if (extensionAPI.settings.get("transcriptionLgg") === null)
       extensionAPI.settings.set("transcriptionLgg", "");
     transcriptionLanguage = await extensionAPI.settings.get("transcriptionLgg");
+    if (extensionAPI.settings.get("speechLgg") === null)
+      extensionAPI.settings.set("speechLgg", "Browser default");
+    speechLanguage = await extensionAPI.settings.get("speechLgg");
     if (extensionAPI.settings.get("prompt") === null)
       extensionAPI.settings.set("prompt", "");
     whisperPrompt = await extensionAPI.settings.get("prompt");
